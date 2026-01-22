@@ -1,0 +1,7 @@
+{
+  "name": "Cinema Identity Rig",
+  "description": "A professional-grade identity rendering interface. Load footage, declare targets, and execute multi-pass geometry reconstruction.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
