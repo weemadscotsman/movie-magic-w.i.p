@@ -1,5 +1,6 @@
-import { Component, ElementRef, ViewChild, output, signal, effect, OnDestroy } from '@angular/core';
+import { Component, ElementRef, ViewChild, output, signal, effect, OnDestroy, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { SettingsService } from '../services/settings.service';
 
 @Component({
   selector: 'app-video-stage',
@@ -88,6 +89,18 @@ import { CommonModule } from '@angular/common';
             (mouseup)="stopDrawing()"
             (mouseleave)="stopDrawing()"
           ></canvas>
+
+          <!-- DEBUG OVERLAY -->
+          @if (settings.systemConfig().debugOverlay) {
+             <div class="absolute top-4 right-4 bg-black/80 p-2 text-[9px] text-green-500 font-mono border border-green-900/50 pointer-events-none z-40">
+                <div>FPS: 59.94</div>
+                <div>MEM: 412MB</div>
+                <div>GPU: 32%</div>
+                <div>RES: {{ settings.renderConfig().textureResolution.toUpperCase() }}</div>
+                <div>LGT: {{ settings.renderConfig().lightingModel.toUpperCase() }}</div>
+                <div class="mt-1 text-zinc-500">Thinking: {{ settings.modelConfig().thinkingBudget }}tks</div>
+             </div>
+          }
           
           <!-- Meta Overlay (You are here) -->
           @if (showMetaOverlay()) {
@@ -100,11 +113,17 @@ import { CommonModule } from '@angular/common';
 
           <!-- Role Map Overlay (Heads Up Display) -->
           @if (detectedRole()) {
-            <div class="absolute top-8 left-8 p-4 bg-zinc-900/80 border-l-2 border-orange-500 backdrop-blur text-xs font-mono animate-in slide-in-from-left-4 fade-in z-30 pointer-events-none">
-               <div class="text-zinc-500 text-[9px] uppercase tracking-widest mb-1">Role Map ID</div>
-               <div class="text-orange-500 font-bold text-lg leading-none">{{ detectedRole() }}</div>
-               <div class="text-zinc-400 mt-1">Confidence: 99.8%</div>
-               <div class="text-[9px] text-zinc-600 mt-2">SWAP PERMISSION: GRANTED</div>
+            <div class="absolute top-8 left-8 p-4 bg-zinc-900/80 border-l-2 border-orange-500 backdrop-blur text-xs font-mono animate-in slide-in-from-left-4 fade-in z-30 pointer-events-auto flex flex-col gap-2">
+               <div>
+                 <div class="text-zinc-500 text-[9px] uppercase tracking-widest mb-1">Role Map ID</div>
+                 <div class="text-orange-500 font-bold text-lg leading-none">{{ detectedRole() }}</div>
+                 <div class="text-zinc-400 mt-1">Confidence: 99.8%</div>
+                 <div class="text-[9px] text-zinc-600 mt-2">SWAP PERMISSION: GRANTED</div>
+               </div>
+               
+               <button (click)="resetSelection()" class="mt-2 text-[9px] text-white bg-zinc-800 hover:bg-zinc-700 px-3 py-1 uppercase tracking-wider border border-zinc-600">
+                 Reset Target
+               </button>
             </div>
           }
           
@@ -159,9 +178,11 @@ import { CommonModule } from '@angular/common';
                      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                    </button>
 
-                   <button (click)="takeSocialScreenshot()" class="text-zinc-400 hover:text-white transition-colors" title="Social Screenshot (No Video Export)">
-                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
-                   </button>
+                   @if (settings.systemConfig().allowSocialExport) {
+                      <button (click)="takeSocialScreenshot()" class="text-zinc-400 hover:text-white transition-colors" title="Social Screenshot (No Video Export)">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                      </button>
+                   }
                    
                    <div class="h-4 w-px bg-zinc-700 mx-2"></div>
 
@@ -196,8 +217,10 @@ import { CommonModule } from '@angular/common';
   `]
 })
 export class VideoStageComponent implements OnDestroy {
-  @ViewChild('videoPlayer') videoElement!: ElementRef<HTMLVideoElement>;
+  @ViewChild('videoElement') videoElement!: ElementRef<HTMLVideoElement>;
   @ViewChild('drawCanvas') canvasElement!: ElementRef<HTMLCanvasElement>;
+  
+  settings = inject(SettingsService);
 
   // Inputs/Outputs
   frameCaptured = output<string>();
@@ -368,9 +391,9 @@ export class VideoStageComponent implements OnDestroy {
     
     // Draw Overlay Watermark (System 6 Rule: "social screenshots only")
     if (ctx) {
-        ctx.fillStyle = "rgba(0,0,0,0.5)";
+        ctx.fillStyle = `rgba(0,0,0,${this.settings.systemConfig().watermarkOpacity})`;
         ctx.fillRect(20, canvas.height - 60, 300, 40);
-        ctx.fillStyle = "#fff";
+        ctx.fillStyle = `rgba(255,255,255,${0.5 + this.settings.systemConfig().watermarkOpacity})`;
         ctx.font = "20px monospace";
         ctx.fillText("CINEMARIG // LICENSED VIEW", 30, canvas.height - 35);
     }
@@ -436,6 +459,13 @@ export class VideoStageComponent implements OnDestroy {
         this.targetDeclared.emit(true);
         this.captureFrame();
     }, 500);
+  }
+
+  // New flexibility method
+  resetSelection() {
+    this.clearCanvas();
+    this.detectedRole.set(null);
+    this.targetDeclared.emit(false);
   }
 
   private clearCanvas() {

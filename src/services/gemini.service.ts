@@ -24,6 +24,20 @@ export class GeminiService {
       systemInstruction += ' You may infer missing details and estimate highly complex geometry creatively.';
     }
 
+    // Build the generation config dynamically
+    const generationConfig: any = {
+      responseMimeType: 'application/json',
+      temperature: config.temperature,
+      topK: config.topK,
+      topP: config.topP,
+      maxOutputTokens: config.maxOutputTokens
+    };
+
+    // Apply Thinking Config if budget > 0 (Only supported on gemini-2.5-flash)
+    if (config.thinkingBudget > 0) {
+      generationConfig.thinkingConfig = { thinkingBudget: config.thinkingBudget };
+    }
+
     try {
       // Helper to strip data:image/png;base64, prefix if present
       const cleanFrame = frameBase64.split(',')[1] || frameBase64;
@@ -63,12 +77,7 @@ export class GeminiService {
             { inlineData: { mimeType: 'image/jpeg', data: cleanFace } }
           ]
         },
-        config: {
-          responseMimeType: 'application/json',
-          temperature: config.temperature,
-          topK: config.topK,
-          topP: config.topP,
-        }
+        config: generationConfig
       });
 
       return response.text || '{}';
